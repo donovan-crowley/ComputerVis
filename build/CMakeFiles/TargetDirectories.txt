@@ -1,0 +1,3 @@
+/Users/donovancrowley/GithubProjects/CVis/build/CMakeFiles/MyProject.dir
+/Users/donovancrowley/GithubProjects/CVis/build/CMakeFiles/edit_cache.dir
+/Users/donovancrowley/GithubProjects/CVis/build/CMakeFiles/rebuild_cache.dir
