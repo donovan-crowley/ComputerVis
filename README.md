@@ -9,7 +9,7 @@ Ensure OpenCV is running:
 pkg-config --modversion opencv4
 
 Terminal commands to configure the project and build an executable:
-mkdir -p build
+mkdir build
 cd build
 cmake ..
 make
