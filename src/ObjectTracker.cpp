@@ -1,5 +1,9 @@
 #include "ObjectTracker.h"
 
+int SEARCH = 0;
+int TRAIN = 1;
+int TRACK = 2;
+
 void ObjectTracker::run() {
 	VideoCapture cap(0);
 
@@ -8,20 +12,29 @@ void ObjectTracker::run() {
 		exit(-1);
 	}
 
-	Mat edges, gray, frame;
 	namedWindow("Control", WINDOW_AUTOSIZE);
+
+	// OpenCV Hue, Saturation, and Value ranges
+	int lastLowH = 0;
+	int lastHighH = 179;
+	int lastLowS = 0;
+	int lastHighS = 255;
+	int lastLowV = 0;
+	int lastHighV = 0;
+
+	int state = SEARCH;
+	
+	Mat originalImg;
 	
 	while(true){
-		cap >> frame;
-
-		if(frame.empty()){
-			cerr << "Empty frame received" << endl;
-			break;
+		bool testing = cap.read(originalImg);
+		flip(originalImg, originalImg, 1);
+		if(!testing){
+			cout << "Failure to read frames from video stream" << endl;
 		}
+		
 
-		cvtColor(frame, gray, COLOR_BGR2GRAY);
-		Canny(gray, edges, 50, 150);
-		imshow("Control", edges);
+		imshow("Control", originalImg);
 
 		if(waitKey(1) == 27) break;
 	}
