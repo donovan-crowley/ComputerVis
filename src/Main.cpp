@@ -3,7 +3,6 @@
 
 #include "Main.h"
 
-int main(){
+void main(){
     ObjectTracker::run();
-    return 0;
 }
