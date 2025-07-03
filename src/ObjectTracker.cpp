@@ -12,7 +12,7 @@ void ObjectTracker::run() {
 		exit(-1);
 	}
 
-	namedWindow("Control", WINDOW_AUTOSIZE);
+	namedWindow("Video Stream", WINDOW_AUTOSIZE);
 
 	// OpenCV Hue, Saturation, and Value ranges
 	int lastLowH = 0;
@@ -25,16 +25,29 @@ void ObjectTracker::run() {
 	int state = SEARCH;
 	
 	Mat originalImg;
+	Point originalP(0, 0);
+	int lastRadius = 200;
+
 	
 	while(true){
-		bool testing = cap.read(originalImg);
 		flip(originalImg, originalImg, 1);
+			
+		// test frames of the image
+		bool testing = cap.read(originalImg);
 		if(!testing){
 			cout << "Failure to read frames from video stream" << endl;
+			break;
 		}
 		
+		Mat circleImg;
+		if(state == SEARCH){
+			circleImg = Mat::zeros(originalImg.size(), CV_8UC3);
+			circle(circleImg, originalP, lastRadius, Scalar(0, 255, 0), 2);
+		}
 
-		imshow("Control", originalImg);
+		Mat imgDisplay = originalImg + circleImg;
+
+		imshow("Video Stream", imgDisplay);
 
 		if(waitKey(1) == 27) break;
 	}
