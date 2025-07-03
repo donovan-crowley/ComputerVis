@@ -18,9 +18,5 @@ class ObjectTracker {
 public:
 	static void run();
 };
-/*private:
-	static cv::Mat thresholdedImg(cv::Mat original, cv::Scalar lowHSV, cv::Scalar highHSV, bool removeNoise, bool convertBackToRGB);
-	static cv::Vec3b RGBtoHSV(float r, float g, float b);
-};*/
 
-#endif /* OBJECTTRACKER_H_ */
+#endif
