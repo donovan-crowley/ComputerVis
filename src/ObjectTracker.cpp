@@ -1,8 +1,9 @@
 #include "ObjectTracker.h"
 
-int SEARCH = 0;
-int TRAIN = 1;
-int TRACK = 2;
+const static int SEARCH = 0;
+const static int TRAIN = 1;
+const static int TRACK = 2;
+const static int FIND = 3;
 
 void ObjectTracker::run() {
 	VideoCapture cap(0);
@@ -24,11 +25,11 @@ void ObjectTracker::run() {
 
 	// My values
 	// Green Circle
-	int lowH = 50;
-	int highH = 70;
-	int lowS = 100;
+	int lowH = 70;
+	int highH = 102;
+	int lowS = 52;
 	int highS = 255;
-	int lowV = 100;
+	int lowV = 72;
 	int highV = 255;
 
 	int state = SEARCH;
@@ -36,7 +37,7 @@ void ObjectTracker::run() {
 	Mat originalImg, displayImg;
 	Point lastCenter = Point(0, 0);
 	int lastRadius = 200;
-
+	Point mid(cap.get(CAP_PROP_FRAME_WIDTH) / 2, cap.get(CAP_PROP_FRAME_HEIGHT) / 2);
 	
 	while(true){
 		if(state != TRAIN){
@@ -50,7 +51,10 @@ void ObjectTracker::run() {
 			}
 		}
 		
+		/*Mat threshold = */
 		Mat circleImg = Mat::zeros(originalImg.size(), CV_8UC3);
+
+		ostringstream os;
 
 		if(state == SEARCH){
 			vector<Vec3f> circles;
@@ -70,25 +74,82 @@ void ObjectTracker::run() {
 			displayImg = originalImg + circleImg;
 		}
 		else if(state == TRAIN){
-
+			displayImg = originalImg;
 		}
 		else if(state == TRACK){
+			displayImg = originalImg;
+		} 
+		else if(state == FIND){
+			Mat imgHSV;
+			cvtColor(originalImg, imgHSV, COLOR_BGR2HSV);
+			int radius = 250;
+			circle(circleImg, mid, radius, Scalar(0, 0, 255), 5, 16, 0);
 
+			vector<int> hue, sat, val;
+			// For loop through entire circle
+			for(int x = mid.x - radius; x <= mid.x + radius; x++){
+				for(int y = mid.y - radius; y <= mid.y + radius; y++){
+					if(x >= 0 && y >= 0 && x < imgHSV.cols && y < imgHSV.rows && 
+						(pow(x - mid.x, 2) + pow(y - mid.y, 2) <= pow(radius, 2))){
+						Vec3b pixelHSV = imgHSV.at<Vec3b>(y, x);
+						hue.push_back(pixelHSV[0]);
+						sat.push_back(pixelHSV[1]);
+						val.push_back(pixelHSV[2]);
+					}
+				}
+			}
+
+			int hueTot = 0, satTot = 0, valTot = 0;
+			for(int i = 0; i < hue.size(); i++){
+				hueTot += hue[i];
+				satTot += sat[i];
+				valTot += val[i];
+			}
+			int hueAvg = hueTot / hue.size();
+			int satAvg = satTot / sat.size();
+			int valAvg = valTot / val.size();
+
+
+			displayImg = originalImg + circleImg;
+
+			os.str("");
+			putText(displayImg, os.str(), Point(40, 60), FONT_HERSHEY_PLAIN, 2.5, Scalar(255, 255, 255), 2);
+			os.str("");
+			os << "H: " << hueAvg;
+			putText(displayImg, os.str(), Point(40, 100), FONT_HERSHEY_PLAIN, 2.5, Scalar(255, 255, 255), 2);
+			os.str("");
+			os << "S: " << satAvg;
+			putText(displayImg, os.str(), Point(40, 140), FONT_HERSHEY_PLAIN, 2.5, Scalar(255, 255, 255), 2);
+			os.str("");
+			os << "V: " << valAvg;
+			putText(displayImg, os.str(), Point(40, 180), FONT_HERSHEY_PLAIN, 2.5, Scalar(255, 255, 255), 2);
+			os.str("");
 		}
 
+		lastCenter = state == FIND ? mid : lastCenter;
+		os << "Coordinates: " << lastCenter;
+		putText(displayImg, os.str(), Point(40, 60), FONT_HERSHEY_PLAIN, 2.5, Scalar(255, 255, 255), 2);
+		
 		imshow("Video Stream", displayImg);
 		int key = waitKey(1);
 
 		// Training
-		if(key == 116){
+		if(key == 116){ // t
 			if(state == SEARCH){
 				state = TRAIN;
 			} else{
 				state = SEARCH;
 			}
 		}
+		else if(key == 32){ // Space Bar
+			if(state == SEARCH){
+				state = FIND;
+			} else{
+				state = SEARCH;
+			}
+		}
 
-		if(key == 27) break;
+		if(key == 27) break; // Esc key
 	}
 	cap.release();
 	destroyAllWindows();
