@@ -345,9 +345,7 @@ Vec3b ObjectTracker::RGB2HSV(float r, float g, float b){
 	if(maxV != 0){
 		s = delta / maxV;
 	} else{
-		s = 0;
-		h = 0;
-		return (h, s, v * 255);
+		return Vec3b(0, 0, v * 255);
 	}
 
 	if(r == maxV){
