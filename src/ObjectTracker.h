@@ -17,6 +17,9 @@ using namespace cv;
 class ObjectTracker {
 public:
 	static void run();
+private:
+	static Mat threshold(Mat imgGray, Scalar highHSV, Scalar lowHSV);
+	static Vec3b RGB2HSV(float r, float g, float b);
 };
 
 #endif
