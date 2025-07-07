@@ -18,7 +18,7 @@ class ObjectTracker {
 public:
 	static void run();
 private:
-	static Mat threshold(Mat imgGray, Scalar highHSV, Scalar lowHSV);
+	static Mat thresholding(Mat originalImg, Scalar lowHSV, Scalar highHSV, bool noise, bool color);
 	static Vec3b RGB2HSV(float r, float g, float b);
 };
 
