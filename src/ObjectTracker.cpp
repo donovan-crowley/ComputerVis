@@ -13,7 +13,7 @@ void ObjectTracker::run() {
 		exit(-1);
 	}
 
-	namedWindow("Object Detection", WINDOW_AUTOSIZE);
+	namedWindow("Control", WINDOW_AUTOSIZE);
 
 	// OpenCV Hue, Saturation, and Value ranges
 	int lastLowH = 0;
@@ -24,12 +24,19 @@ void ObjectTracker::run() {
 	int lastHighV = 255;
 
 	// My values
-	// Green Circle
+	/* Green Circle
 	int lowH = 70;
-	int highH = 102;
-	int lowS = 52;
-	int highS = 255;
-	int lowV = 72;
+	int highH = 90;
+	int lowS = 100;
+	int highS = 130;
+	int lowV = 60;
+	int highV = 100;*/
+
+	int lowH = 0;
+	int highH = 25;
+	int lowS = 85;
+	int highS = 135;
+	int lowV = 100;
 	int highV = 255;
 
 	int state = SEARCH;
@@ -41,18 +48,27 @@ void ObjectTracker::run() {
 	Point lastCenter = Point(0, 0);
 	int lastRadius = 200;
 	Point mid(cap.get(CAP_PROP_FRAME_WIDTH) / 2, cap.get(CAP_PROP_FRAME_HEIGHT) / 2);
+
+	Mat imgTmp;
+	cap.read(imgTmp);
+	Mat imgLines = Mat::zeros(imgTmp.size(), CV_8UC3);
+
+	int lastX = -1; 
+	int lastY = -1;
 	
 	while(true){
-		// Test frames of the image
-		bool testing = cap.read(originalImg);
-		flip(originalImg, originalImg, 1);
+		if(state != TRAIN){
+			// Test frames of the image
+			bool testing = cap.read(originalImg);
+			flip(originalImg, originalImg, 1);
 
-		if(!testing){
-			cout << "Failure to read frames from video stream" << endl;
-			break;
+			if(!testing){
+				cout << "Failure to read frames from video stream" << endl;
+				break;
+			}
 		}
 		
-		Mat thresholdImg = ObjectTracker::threshold(originalImg, Scalar(highH, highS, highV), Scalar(lowH, lowS, lowV));
+		Mat thresholdImg = ObjectTracker::thresholding(originalImg, Scalar(lowH, lowS, lowV), Scalar(highH, highS, highV), true, false);
 		Mat circleImg = Mat::zeros(originalImg.size(), CV_8UC3);
 		ostringstream os;
 
@@ -77,10 +93,12 @@ void ObjectTracker::run() {
 			vector<double> internalAvg = vector<double>(3, 0.0);
 			vector<double> externalAvg = vector<double>(3, 0.0);
 			int internalCount = 0, externalCount = 0;
-
+			thresholdImg = ObjectTracker::thresholding(trainingImg, Scalar(lowH, lowS, lowV), Scalar(highH, highS, highV), false, true);
+			Mat imgHSV;
+			cvtColor(trainingImg, imgHSV, COLOR_BGR2HSV);
 			for(int x = 0; x < thresholdImg.rows; x++){
 				for(int y = 0; y < thresholdImg.cols; y++){
-					Vec3b color = thresholdImg.at<Vec3b>(y, x);
+					Vec3b color = imgHSV.at<Vec3b>(y, x);
 					// Inside circle
 					if(pow(x - lastCenter.x, 2) + pow(y - lastCenter.y, 2) < pow(lastRadius, 2)){
 						internalAvg[0] += color[0];
@@ -116,9 +134,9 @@ void ObjectTracker::run() {
 			if(progress > 12){
 				state = TRACK;
 			}
-			else if((internalChange >= 0 && externalChange >= 0 && internalChange >= externalChange) || 
-			(internalChange >= 0 && externalChange <= 0 && internalChange >= externalChange) ||
-			(internalChange >= 0 && externalChange <= 0)){
+			else if((internalChange >= 0 && externalChange >= 0 && internalChange >= externalChange) || // Internal color increased
+			(internalChange >= 0 && externalChange <= 0 && internalChange >= externalChange) || // Noise decreased
+			(internalChange >= 0 && externalChange <= 0)){ // Internal more stable than external
 				lastInternalAvg = internal;
 				lastExternalAvg = external;
 				lastLowH = lowH;
@@ -146,7 +164,6 @@ void ObjectTracker::run() {
 				else if(progress == 6){
 					highV = min(255, highV + step);
 				}
-
 				else if(progress == 7){
 					lowH = min(179, lowH + step);
 				}
@@ -183,9 +200,43 @@ void ObjectTracker::run() {
 			}
 
 			displayImg = thresholdImg;
+
+			os.str("");
+			os << "H: (" << highH << " - " << lowH << ")";
+			putText(displayImg, os.str(), Point(40, 100), FONT_HERSHEY_PLAIN, 2.5, Scalar(255, 255, 255), 2);
+			os.str("");
+			os << "S: (" << highS << " - " << lowS << ")";
+			putText(displayImg, os.str(), Point(40, 140), FONT_HERSHEY_PLAIN, 2.5, Scalar(255, 255, 255), 2);
+			os.str("");
+			os << "V: (" << highV << " - " << lowV << ")";
+			putText(displayImg, os.str(), Point(40, 180), FONT_HERSHEY_PLAIN, 2.5, Scalar(255, 255, 255), 2);
+			os.str("");
 		}
 		else if(state == TRACK){
-			displayImg = originalImg;
+			//vector<Point> contours;
+			//findContours(thresholdImg, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
+			//for(size_t i = 0; i < contours.size(); i++){
+				Moments m = moments(thresholdImg);
+
+				double m00 = m.m00;
+				double m10 = m.m10;
+				double m01 = m.m01;
+
+				// No objects in image possibly due to noise
+				if(m00 > 100000){
+					int posX = m10 / m00;
+					int posY = m01 / m00;
+					circle(circleImg, Point(posX, posY), 15, Scalar(255, 0, 0), 3, 8);
+
+					if(lastX >= 0 && lastY >= 0 && posX >= 0 && posY >= 0){
+						line(imgLines, Point(posX, posY), Point(lastX, lastY), Scalar(0, 0, 255), 1);
+					}
+					lastX = posX;
+					lastY = posY;
+				}
+			//}
+
+			displayImg = originalImg + circleImg + imgLines;
 		} 
 		else if(state == READ){
 			Mat imgHSV;
@@ -214,8 +265,6 @@ void ObjectTracker::run() {
 			displayImg = originalImg + circleImg;
 
 			os.str("");
-			putText(displayImg, os.str(), Point(40, 60), FONT_HERSHEY_PLAIN, 2.5, Scalar(255, 255, 255), 2);
-			os.str("");
 			os << "H: " << hue;
 			putText(displayImg, os.str(), Point(40, 100), FONT_HERSHEY_PLAIN, 2.5, Scalar(255, 255, 255), 2);
 			os.str("");
@@ -230,6 +279,7 @@ void ObjectTracker::run() {
 		lastCenter = state == READ ? mid : lastCenter;
 		os << "Coordinates: " << lastCenter;
 		putText(displayImg, os.str(), Point(40, 60), FONT_HERSHEY_PLAIN, 2.5, Scalar(255, 255, 255), 2);
+
 		
 		imshow("Object Detection", displayImg);
 		int key = waitKey(1);
@@ -261,9 +311,8 @@ void ObjectTracker::run() {
 				int count = 0;
 				for (int x = 0; x < originalImg.rows; x++) {
 				    for (int y = 0; y < originalImg.cols; y++) {
-				        double dist = sqrt((y - lastCenter.x) * (y - lastCenter.x) + (x - lastCenter.y) * (x - lastCenter.y));
-				        if (dist < lastRadius) {
-				        	Vec3b color = originalImg.at<Vec3b>(x, y);
+				        if (pow(x - lastCenter.x, 2) + pow(y - lastCenter.y, 2) < pow(lastRadius, 2)) {
+				        	Vec3b color = originalImg.at<Vec3b>(y, x);
 				        	average[0] += color[0];
 				        	average[1] += color[1];
 				        	average[2] += color[2];
@@ -277,24 +326,21 @@ void ObjectTracker::run() {
 
 				trainingImg = Mat(originalImg);
 				Vec3b hsv = ObjectTracker::RGB2HSV(average[0], average[1], average[2]);
-				int rangeH = 20;
-				int rangeS = 20;
-				int rangeV = 20;
-				lowH = max(0, hsv[0] - rangeH);
-				highH = min(179, hsv[0] + rangeH);
-				lowS = max(0, hsv[1] - rangeS);
-				highS = min(255, hsv[1] + rangeS);
-				lowV = max(0, hsv[2] - rangeV);
-				highV = min(255, hsv[2] + rangeV);
+				lowH = max(0, hsv[0] - 20);
+				highH = min(179, hsv[0] + 20);
+				lowS = max(0, hsv[1] - 20);
+				highS = min(255, hsv[1] + 20);
+				lowV = max(0, hsv[2] - 20);
+				highV = min(255, hsv[2] + 20);
 
-				createTrackbar("LowH", "Control", NULL, 179); //Hue (0 - 179)
-				createTrackbar("HighH", "Control", NULL, 179);
+				createTrackbar("LowH", "Control", &lowH, 179);
+				createTrackbar("HighH", "Control", &highH, 179);
 
-				createTrackbar("LowS", "Control", NULL, 255); //Saturation (0 - 255)
-				createTrackbar("HighS", "Control", NULL, 255);
+				createTrackbar("LowS", "Control", &lowS, 255); 
+				createTrackbar("HighS", "Control", &highS, 255);
 
-				createTrackbar("LowV", "Control", NULL, 255); //Value (0 - 255)
-				createTrackbar("HighV", "Control", NULL, 255);
+				createTrackbar("LowV", "Control", &lowV, 255);
+				createTrackbar("HighV", "Control", &highV, 255);
 			} else{
 				state = SEARCH;
 			}
@@ -313,22 +359,27 @@ void ObjectTracker::run() {
 	destroyAllWindows();
 }
 
-Mat ObjectTracker::threshold(Mat originalImg, Scalar highHSV, Scalar lowHSV){
+Mat ObjectTracker::thresholding(Mat originalImg, Scalar lowHSV, Scalar highHSV, bool noise, bool color){
 	Mat imgHSV;
 	cvtColor(originalImg, imgHSV, COLOR_BGR2HSV);
 	Mat thresholdImg;
 	inRange(imgHSV, lowHSV, highHSV, thresholdImg);
 
-	// Morphological Opening
-	erode(thresholdImg, thresholdImg, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
-	dilate(thresholdImg, thresholdImg, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+	if(noise){
+		// Morphological Opening
+		erode(thresholdImg, thresholdImg, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+		dilate(thresholdImg, thresholdImg, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
 
-	// Morphological Closing
-	dilate(thresholdImg, thresholdImg, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
-	erode(thresholdImg, thresholdImg, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+		// Morphological Closing
+		dilate(thresholdImg, thresholdImg, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+		erode(thresholdImg, thresholdImg, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+	}
 
 	GaussianBlur(thresholdImg, thresholdImg, Size(51, 51), 0);
-	cvtColor(thresholdImg, thresholdImg, COLOR_GRAY2RGB);
+
+	if(color){
+		cvtColor(thresholdImg, thresholdImg, COLOR_GRAY2RGB);
+	}
 
 	return thresholdImg;
 }
@@ -345,7 +396,7 @@ Vec3b ObjectTracker::RGB2HSV(float r, float g, float b){
 	if(maxV != 0){
 		s = delta / maxV;
 	} else{
-		return Vec3b(0, 0, v * 255);
+		return Vec3b(0, 0, 0); // Black
 	}
 
 	if(r == maxV){
