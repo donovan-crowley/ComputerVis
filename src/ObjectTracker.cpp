@@ -125,6 +125,9 @@ void ObjectTracker::run() {
 			Vec3b internal = Vec3b(internalAvg[0], internalAvg[1], internalAvg[2]);
 			Vec3b external = Vec3b(externalAvg[0], externalAvg[1], externalAvg[2]);
 
+			double morph = (double) lastInternalAvg[0];
+			circle(circleImg, lastCenter, lastRadius, Scalar(0, morph, 255 - morph), 3, 8);
+
 			if(lastHighH != highH || lastLowH != lowH || lastHighS != highS || lastLowS != lowS || lastHighV != highV || lastLowV != lowV){
 				cout << "Progress: " << progress << endl;
 				cout << "Step: " << step << endl;
@@ -201,7 +204,7 @@ void ObjectTracker::run() {
 				progress++;
 			}
 
-			displayImg = thresholdImg;
+			displayImg = thresholdImg + circleImg;
 
 			os.str("");
 			os << "H: (" << lowH << " - " << highH << ")";
@@ -215,28 +218,24 @@ void ObjectTracker::run() {
 			os.str("");
 		}
 		else if(state == TRACK){
-			//vector<Point> contours;
-			//findContours(thresholdImg, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
-			//for(size_t i = 0; i < contours.size(); i++){
-				Moments m = moments(thresholdImg);
+			Moments m = moments(thresholdImg);
 
-				double m00 = m.m00;
-				double m10 = m.m10;
-				double m01 = m.m01;
+			double m00 = m.m00;
+			double m10 = m.m10;
+			double m01 = m.m01;
 
-				// No objects in image possibly due to noise
-				if(m00 > 100000){
-					int posX = m10 / m00;
-					int posY = m01 / m00;
-					circle(circleImg, Point(posX, posY), 15, Scalar(255, 0, 0), 3, 8);
-
-					if(lastX >= 0 && lastY >= 0 && posX >= 0 && posY >= 0){
-						line(imgLines, Point(posX, posY), Point(lastX, lastY), Scalar(0, 0, 255), 1);
-					}
-					lastX = posX;
-					lastY = posY;
+			// No objects in image possibly due to noise
+			if(m00 > 100000){
+				int posX = m10 / m00;
+				int posY = m01 / m00;
+				circle(circleImg, Point(posX, posY), 15, Scalar(255, 0, 0), 3, 8);
+				
+				if(lastX >= 0 && lastY >= 0 && posX >= 0 && posY >= 0){
+					line(imgLines, Point(posX, posY), Point(lastX, lastY), Scalar(0, 0, 255), 1);
 				}
-			//}
+				lastX = posX;
+				lastY = posY;
+			}
 
 			displayImg = originalImg + circleImg + imgLines;
 		} 
@@ -339,15 +338,16 @@ void ObjectTracker::run() {
 			}
 		}
 		else if(key == 32){ // Space Bar
-			if(state == SEARCH){
+			if(state != READ){
 				state = READ;
 			} else{
 				state = SEARCH;
 			}
 		}
-		else if(key == 67){
+		else if(key == 99){ // c
 			if(state != SEARCH){
 				state = SEARCH;
+				imgLines = Mat::zeros(imgTmp.size(), CV_8UC3);
 			}
 		}
 		else if(key == 27) break; // Esc key
