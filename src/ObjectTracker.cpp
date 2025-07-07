@@ -24,20 +24,21 @@ void ObjectTracker::run() {
 	int lastHighV = 255;
 
 	// My values
-	/* Green Circle
+	// Green Circle
 	int lowH = 70;
 	int highH = 90;
 	int lowS = 100;
 	int highS = 130;
 	int lowV = 60;
-	int highV = 100;*/
+	int highV = 100;
 
-	int lowH = 0;
-	int highH = 25;
-	int lowS = 85;
-	int highS = 135;
-	int lowV = 100;
-	int highV = 255;
+	/*
+	int lowH = 80;
+	int highH = 120;
+	int lowS = 170;
+	int highS = 210;
+	int lowV = 110;
+	int highV = 150;*/
 
 	int state = SEARCH;
 	int progress = 0, step = 2, initialStep = 2;
@@ -98,9 +99,9 @@ void ObjectTracker::run() {
 			cvtColor(trainingImg, imgHSV, COLOR_BGR2HSV);
 			for(int x = 0; x < thresholdImg.rows; x++){
 				for(int y = 0; y < thresholdImg.cols; y++){
-					Vec3b color = imgHSV.at<Vec3b>(y, x);
+					Vec3b color = imgHSV.at<Vec3b>(x, y);
 					// Inside circle
-					if(pow(x - lastCenter.x, 2) + pow(y - lastCenter.y, 2) < pow(lastRadius, 2)){
+					if(pow(y - lastCenter.x, 2) + pow(x - lastCenter.y, 2) < pow(lastRadius, 2)){
 						internalAvg[0] += color[0];
 						internalAvg[1] += color[1];
 						internalAvg[2] += color[2];
@@ -126,6 +127,7 @@ void ObjectTracker::run() {
 
 			if(lastHighH != highH || lastLowH != lowH || lastHighS != highS || lastLowS != lowS || lastHighV != highV || lastLowV != lowV){
 				cout << "Progress: " << progress << endl;
+				cout << "Step: " << step << endl;
 				cout << "Internal Change: " << internalChange << endl;
 				cout << "External Change: " << externalChange << endl;
 				cout << "New internal: " << internal << ", Old internal: " << lastInternalAvg << endl;
@@ -202,13 +204,13 @@ void ObjectTracker::run() {
 			displayImg = thresholdImg;
 
 			os.str("");
-			os << "H: (" << highH << " - " << lowH << ")";
+			os << "H: (" << lowH << " - " << highH << ")";
 			putText(displayImg, os.str(), Point(40, 100), FONT_HERSHEY_PLAIN, 2.5, Scalar(255, 255, 255), 2);
 			os.str("");
-			os << "S: (" << highS << " - " << lowS << ")";
+			os << "S: (" << lowS << " - " << highS << ")";
 			putText(displayImg, os.str(), Point(40, 140), FONT_HERSHEY_PLAIN, 2.5, Scalar(255, 255, 255), 2);
 			os.str("");
-			os << "V: (" << highV << " - " << lowV << ")";
+			os << "V: (" << lowV << " - " << highV << ")";
 			putText(displayImg, os.str(), Point(40, 180), FONT_HERSHEY_PLAIN, 2.5, Scalar(255, 255, 255), 2);
 			os.str("");
 		}
@@ -311,8 +313,8 @@ void ObjectTracker::run() {
 				int count = 0;
 				for (int x = 0; x < originalImg.rows; x++) {
 				    for (int y = 0; y < originalImg.cols; y++) {
-				        if (pow(x - lastCenter.x, 2) + pow(y - lastCenter.y, 2) < pow(lastRadius, 2)) {
-				        	Vec3b color = originalImg.at<Vec3b>(y, x);
+				        if (pow(y - lastCenter.x, 2) + pow(x - lastCenter.y, 2) < pow(lastRadius, 2)) {
+				        	Vec3b color = originalImg.at<Vec3b>(x, y);
 				        	average[0] += color[0];
 				        	average[1] += color[1];
 				        	average[2] += color[2];
@@ -332,15 +334,6 @@ void ObjectTracker::run() {
 				highS = min(255, hsv[1] + 20);
 				lowV = max(0, hsv[2] - 20);
 				highV = min(255, hsv[2] + 20);
-
-				createTrackbar("LowH", "Control", &lowH, 179);
-				createTrackbar("HighH", "Control", &highH, 179);
-
-				createTrackbar("LowS", "Control", &lowS, 255); 
-				createTrackbar("HighS", "Control", &highS, 255);
-
-				createTrackbar("LowV", "Control", &lowV, 255);
-				createTrackbar("HighV", "Control", &highV, 255);
 			} else{
 				state = SEARCH;
 			}
@@ -352,8 +345,12 @@ void ObjectTracker::run() {
 				state = SEARCH;
 			}
 		}
-
-		if(key == 27) break; // Esc key
+		else if(key == 67){
+			if(state != SEARCH){
+				state = SEARCH;
+			}
+		}
+		else if(key == 27) break; // Esc key
 	}
 	cap.release();
 	destroyAllWindows();
