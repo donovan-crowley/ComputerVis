@@ -217,6 +217,8 @@ void ObjectTracker::run() {
 				lastY = posY;
 			}
 
+
+
 			displayImg = originalImg + circleImg + imgLines;
 		} 
 		else if(state == READ){
@@ -256,8 +258,10 @@ void ObjectTracker::run() {
 			putText(displayImg, os.str(), Point(40, 180), FONT_HERSHEY_PLAIN, 2.5, Scalar(255, 255, 255), 2);
 			os.str("");
 		}
-
+		
+		Point trackCenter(lastX, lastY);
 		lastCenter = state == READ ? mid : lastCenter;
+		lastCenter = state == TRACK ? trackCenter : lastCenter;
 		os << "Coordinates: " << lastCenter;
 		putText(displayImg, os.str(), Point(40, 60), FONT_HERSHEY_PLAIN, 2.5, Scalar(255, 255, 255), 2);
 		os.str("");
