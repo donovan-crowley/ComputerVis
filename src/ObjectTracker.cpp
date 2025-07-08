@@ -283,6 +283,7 @@ void ObjectTracker::run() {
 		// Training
 		if(key == 116){ // t
 			if(state == SEARCH){
+				imgLines = Mat::zeros(imgTmp.size(), CV_8UC3);
 				state = TRAIN;
 				progress = 1;
 
