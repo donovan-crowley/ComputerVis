@@ -24,21 +24,12 @@ void ObjectTracker::run() {
 	int lastHighV = 255;
 
 	// My values
-	// Green Circle
-	int lowH = 70;
-	int highH = 90;
-	int lowS = 100;
-	int highS = 130;
-	int lowV = 60;
-	int highV = 100;
-
-	/*
-	int lowH = 80;
-	int highH = 120;
-	int lowS = 170;
-	int highS = 210;
-	int lowV = 110;
-	int highV = 150;*/
+	int lowH = lastLowH;
+	int highH = lastHighH;
+	int lowS = lastLowS;
+	int highS = lastHighS;
+	int lowV = lastLowV;
+	int highV = lastHighV;
 
 	int state = SEARCH;
 	int progress = 0, step = 2, initialStep = 2;
@@ -47,7 +38,7 @@ void ObjectTracker::run() {
 	
 	Mat originalImg, displayImg, trainingImg;
 	Point lastCenter = Point(0, 0);
-	int lastRadius = 200;
+	int lastRadius = 0;
 	Point mid(cap.get(CAP_PROP_FRAME_WIDTH) / 2, cap.get(CAP_PROP_FRAME_HEIGHT) / 2);
 
 	Mat imgTmp;
@@ -91,15 +82,18 @@ void ObjectTracker::run() {
 			displayImg = originalImg + circleImg;
 		}
 		else if(state == TRAIN){
-			vector<double> internalAvg = vector<double>(3, 0.0);
-			vector<double> externalAvg = vector<double>(3, 0.0);
-			int internalCount = 0, externalCount = 0;
+			double morph = (double) lastInternalAvg[0];
+			circle(circleImg, lastCenter, lastRadius, Scalar(0, morph, 255 - morph), 3, 8);
 			thresholdImg = ObjectTracker::thresholding(trainingImg, Scalar(lowH, lowS, lowV), Scalar(highH, highS, highV), false, true);
-			Mat imgHSV;
-			cvtColor(trainingImg, imgHSV, COLOR_BGR2HSV);
+			displayImg = thresholdImg + circleImg;
+
+			vector<double> internalAvg = vector<double>(3);
+			vector<double> externalAvg = vector<double>(3);
+			int internalCount = 0, externalCount = 0;
+
 			for(int x = 0; x < thresholdImg.rows; x++){
 				for(int y = 0; y < thresholdImg.cols; y++){
-					Vec3b color = imgHSV.at<Vec3b>(x, y);
+					Vec3b color = thresholdImg.at<Vec3b>(x, y);
 					// Inside circle
 					if(pow(y - lastCenter.x, 2) + pow(x - lastCenter.y, 2) < pow(lastRadius, 2)){
 						internalAvg[0] += color[0];
@@ -119,17 +113,14 @@ void ObjectTracker::run() {
 				internalAvg[i] /= internalCount;
 				externalAvg[i] /= externalCount;
 			}
-			
-			double internalChange = ((double)internalAvg[0] - lastInternalAvg[0] + internalAvg[1] - lastInternalAvg[1] + internalAvg[2] - lastInternalAvg[2]) / 3;
-			double externalChange = ((double)externalAvg[0] - lastExternalAvg[0] + externalAvg[1] - lastExternalAvg[1] + externalAvg[2] - lastExternalAvg[2]) / 3;
+
 			Vec3b internal = Vec3b(internalAvg[0], internalAvg[1], internalAvg[2]);
 			Vec3b external = Vec3b(externalAvg[0], externalAvg[1], externalAvg[2]);
-
-			double morph = (double) lastInternalAvg[0];
-			circle(circleImg, lastCenter, lastRadius, Scalar(0, morph, 255 - morph), 3, 8);
-
+			double internalChange = ((double)internal[0] - lastInternalAvg[0] + internal[1] - lastInternalAvg[1] + internal[2] - lastInternalAvg[2]) / 3;
+			double externalChange = ((double)external[0] - lastExternalAvg[0] + external[1] - lastExternalAvg[1] + external[2] - lastExternalAvg[2]) / 3;
+			
 			if(lastHighH != highH || lastLowH != lowH || lastHighS != highS || lastLowS != lowS || lastHighV != highV || lastLowV != lowV){
-				cout << "Progress: " << progress << endl;
+				cout << "VISIBLE Progress: " << progress << endl;
 				cout << "Step: " << step << endl;
 				cout << "Internal Change: " << internalChange << endl;
 				cout << "External Change: " << externalChange << endl;
@@ -139,9 +130,10 @@ void ObjectTracker::run() {
 			if(progress > 12){
 				state = TRACK;
 			}
-			else if((internalChange >= 0 && externalChange >= 0 && internalChange >= externalChange) || // Internal color increased
-			(internalChange >= 0 && externalChange <= 0 && internalChange >= externalChange) || // Noise decreased
-			(internalChange >= 0 && externalChange <= 0)){ // Internal more stable than external
+			// Internal color increased or noise decreased or internal more stable than external
+			else if((internalChange >= 0 && externalChange >= 0 && internalChange >= externalChange) || 
+			(internalChange <= 0 && externalChange <= 0 && internalChange >= externalChange) || 
+			(internalChange >= 0 && externalChange <= 0)){ 
 				lastInternalAvg = internal;
 				lastExternalAvg = external;
 				lastLowH = lowH;
@@ -187,7 +179,8 @@ void ObjectTracker::run() {
 				else if(progress == 12){
 					highV = max(0, highV - step);
 				}
-				else{
+				
+				if(lastHighH == highH && lastLowH == lowH && lastHighS == highS && lastLowS == lowS && lastHighV == highV && lastLowV == lowV){
 					progress++;
 				}
 			}
@@ -203,19 +196,6 @@ void ObjectTracker::run() {
 				step = initialStep;
 				progress++;
 			}
-
-			displayImg = thresholdImg + circleImg;
-
-			os.str("");
-			os << "H: (" << lowH << " - " << highH << ")";
-			putText(displayImg, os.str(), Point(40, 100), FONT_HERSHEY_PLAIN, 2.5, Scalar(255, 255, 255), 2);
-			os.str("");
-			os << "S: (" << lowS << " - " << highS << ")";
-			putText(displayImg, os.str(), Point(40, 140), FONT_HERSHEY_PLAIN, 2.5, Scalar(255, 255, 255), 2);
-			os.str("");
-			os << "V: (" << lowV << " - " << highV << ")";
-			putText(displayImg, os.str(), Point(40, 180), FONT_HERSHEY_PLAIN, 2.5, Scalar(255, 255, 255), 2);
-			os.str("");
 		}
 		else if(state == TRACK){
 			Moments m = moments(thresholdImg);
@@ -280,11 +260,22 @@ void ObjectTracker::run() {
 		lastCenter = state == READ ? mid : lastCenter;
 		os << "Coordinates: " << lastCenter;
 		putText(displayImg, os.str(), Point(40, 60), FONT_HERSHEY_PLAIN, 2.5, Scalar(255, 255, 255), 2);
+		os.str("");
+		if(state != READ){
+			os << "H: (" << lowH << " - " << highH << ")";
+			putText(displayImg, os.str(), Point(40, 100), FONT_HERSHEY_PLAIN, 2.5, Scalar(255, 255, 255), 2);
+			os.str("");
+			os << "S: (" << lowS << " - " << highS << ")";
+			putText(displayImg, os.str(), Point(40, 140), FONT_HERSHEY_PLAIN, 2.5, Scalar(255, 255, 255), 2);
+			os.str("");
+			os << "V: (" << lowV << " - " << highV << ")";
+			putText(displayImg, os.str(), Point(40, 180), FONT_HERSHEY_PLAIN, 2.5, Scalar(255, 255, 255), 2);
+			os.str("");
+		}
 
-		
 		imshow("Object Detection", displayImg);
-		int key = waitKey(1);
 
+		int key = waitKey(1);
 		// Training
 		if(key == 116){ // t
 			if(state == SEARCH){
@@ -345,10 +336,7 @@ void ObjectTracker::run() {
 			}
 		}
 		else if(key == 99){ // c
-			if(state != SEARCH){
-				state = SEARCH;
-				imgLines = Mat::zeros(imgTmp.size(), CV_8UC3);
-			}
+			imgLines = Mat::zeros(imgTmp.size(), CV_8UC3);
 		}
 		else if(key == 27) break; // Esc key
 	}
