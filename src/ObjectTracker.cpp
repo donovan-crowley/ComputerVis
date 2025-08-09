@@ -211,7 +211,7 @@ void ObjectTracker::run() {
 				circle(circleImg, Point(posX, posY), 15, Scalar(255, 0, 0), 3, 8);
 				
 				if(lastX >= 0 && lastY >= 0 && posX >= 0 && posY >= 0){
-					line(imgLines, Point(posX, posY), Point(lastX, lastY), Scalar(0, 0, 255), 1);
+					line(imgLines, Point(posX, posY), Point(lastX, lastY), Scalar(0, 0, 255), 5);
 				}
 				lastX = posX;
 				lastY = posY;
