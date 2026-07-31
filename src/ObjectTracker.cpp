@@ -1,11 +1,13 @@
 #include "ObjectTracker.h"
 
+// State machine constants
 const static int SEARCH = 0;
 const static int TRAIN = 1;
 const static int TRACK = 2;
 const static int READ = 3;
 
 void ObjectTracker::run() {
+	// Default video capture stream
 	VideoCapture cap(0);
 
 	if (!cap.isOpened()) {
@@ -15,7 +17,7 @@ void ObjectTracker::run() {
 
 	namedWindow("Control", WINDOW_AUTOSIZE);
 
-	// OpenCV Hue, Saturation, and Value ranges
+	// Baseline OpenCV hue, saturation, and value ranges
 	int lastLowH = 0;
 	int lastHighH = 179;
 	int lastLowS = 0;
@@ -23,7 +25,7 @@ void ObjectTracker::run() {
 	int lastLowV = 0;
 	int lastHighV = 255;
 
-	// My values
+	// Working HSV tracking variables
 	int lowH = lastLowH;
 	int highH = lastHighH;
 	int lowS = lastLowS;
@@ -52,7 +54,7 @@ void ObjectTracker::run() {
 		if(state != TRAIN){
 			// Test frames of the image
 			bool testing = cap.read(originalImg);
-			flip(originalImg, originalImg, 1);
+			flip(originalImg, originalImg, 1); // Mirror feed horizontally
 
 			if(!testing){
 				cout << "Failure to read frames from video stream" << endl;
@@ -60,10 +62,12 @@ void ObjectTracker::run() {
 			}
 		}
 		
+		// Generate binary threshold matrix on current HSV bounds
 		Mat thresholdImg = ObjectTracker::thresholding(originalImg, Scalar(lowH, lowS, lowV), Scalar(highH, highS, highV), true, false);
 		Mat circleImg = Mat::zeros(originalImg.size(), CV_8UC3);
 		ostringstream os;
 
+		// STATE 0: Hough Circle Detection
 		if(state == SEARCH){
 			Mat imgGray;
 			vector<Vec3f> circles;
@@ -81,6 +85,7 @@ void ObjectTracker::run() {
 
 			displayImg = originalImg + circleImg;
 		}
+		// STATE 1: Adaptive HSV range training and optimization
 		else if(state == TRAIN){
 			double morph = (double) lastInternalAvg[0];
 			circle(circleImg, lastCenter, lastRadius, Scalar(0, morph, 255 - morph), 3, 8);
@@ -91,6 +96,7 @@ void ObjectTracker::run() {
 			vector<double> externalAvg = vector<double>(3);
 			int internalCount = 0, externalCount = 0;
 
+			// Pixel spatial classification (internal vs external)
 			for(int x = 0; x < thresholdImg.rows; x++){
 				for(int y = 0; y < thresholdImg.cols; y++){
 					Vec3b color = thresholdImg.at<Vec3b>(x, y);
@@ -128,7 +134,7 @@ void ObjectTracker::run() {
 				cout << "New external: "  << external << ", Old external: " << lastExternalAvg << endl;
 			}
 			if(progress > 12){
-				state = TRACK;
+				state = TRACK; // Automatically transition to tracking once completed
 			}
 			// Internal color increased or noise decreased or internal more stable than external
 			else if((internalChange >= 0 && externalChange >= 0 && internalChange >= externalChange) || 
@@ -143,6 +149,7 @@ void ObjectTracker::run() {
 				lastLowV = lowV;
 				lastHighV = highV;
 
+				// Expansion and contraction of HSV bounds across channels
 				if(progress == 1){
 					lowH = max(0, lowH - step);
 				}
@@ -197,6 +204,7 @@ void ObjectTracker::run() {
 				progress++;
 			}
 		}
+		// STATE 2: Object Tracking
 		else if(state == TRACK){
 			Moments m = moments(thresholdImg);
 
@@ -204,7 +212,7 @@ void ObjectTracker::run() {
 			double m10 = m.m10;
 			double m01 = m.m01;
 
-			// No objects in image possibly due to noise
+			// Filter out noise based on area threshold
 			if(m00 > 100000){
 				int posX = m10 / m00;
 				int posY = m01 / m00;
@@ -221,6 +229,7 @@ void ObjectTracker::run() {
 
 			displayImg = originalImg + circleImg + imgLines;
 		} 
+		// STATE 3: Color Value Reading
 		else if(state == READ){
 			Mat imgHSV;
 			cvtColor(originalImg, imgHSV, COLOR_BGR2HSV);
@@ -333,6 +342,7 @@ void ObjectTracker::run() {
 				state = SEARCH;
 			}
 		}
+		// Read
 		else if(key == 32){ // Space Bar
 			if(state != READ){
 				state = READ;
@@ -340,15 +350,18 @@ void ObjectTracker::run() {
 				state = SEARCH;
 			}
 		}
+		// Clear tracking trail
 		else if(key == 99){ // c
 			imgLines = Mat::zeros(imgTmp.size(), CV_8UC3);
 		}
+		// Exit program
 		else if(key == 27) break; // Esc key
 	}
 	cap.release();
 	destroyAllWindows();
 }
 
+// Applies HSV filering, morphological noise reducution, and Gaussian blur
 Mat ObjectTracker::thresholding(Mat originalImg, Scalar lowHSV, Scalar highHSV, bool noise, bool color){
 	Mat imgHSV;
 	cvtColor(originalImg, imgHSV, COLOR_BGR2HSV);
@@ -356,11 +369,11 @@ Mat ObjectTracker::thresholding(Mat originalImg, Scalar lowHSV, Scalar highHSV, 
 	inRange(imgHSV, lowHSV, highHSV, thresholdImg);
 
 	if(noise){
-		// Morphological Opening
+		// Morphological opening to remove background noise
 		erode(thresholdImg, thresholdImg, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
 		dilate(thresholdImg, thresholdImg, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
 
-		// Morphological Closing
+		// Morphological closing to fill internal holes
 		dilate(thresholdImg, thresholdImg, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
 		erode(thresholdImg, thresholdImg, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
 	}
@@ -374,6 +387,7 @@ Mat ObjectTracker::thresholding(Mat originalImg, Scalar lowHSV, Scalar highHSV, 
 	return thresholdImg;
 }
 
+// Convert RGB to HSV format
 Vec3b ObjectTracker::RGB2HSV(float r, float g, float b){
 	float h, s, v, minV, maxV, delta;
 	r /= 255;
